@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         info = TextView(this)
         root.addView(info)
         preview = DrawingView()
-        root.addView(preview, LinearLayout.LayoutParams(-1,0,1f))
+        root.addView(preview, LinearLayout.LayoutParams(-1, (320 * resources.displayMetrics.density).toInt()))
         fun button(label: String, action: () -> Unit) {
             root.addView(Button(this).apply { text = label; setOnClickListener { action() } })
         }
@@ -94,6 +94,7 @@ class MainActivity : Activity() {
                     imageUri=uri
                     loadImage(uri)
                     preview.invalidate()
+                    Toast.makeText(this,"Imagen cargada",Toast.LENGTH_SHORT).show()
                 } catch(e: Exception) { Toast.makeText(this,"Error al abrir imagen: ${e.message}",Toast.LENGTH_LONG).show() }
             }
         }
