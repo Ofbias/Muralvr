@@ -1,6 +1,10 @@
 package com.muralvr.app
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import android.hardware.Camera
+import android.graphics.SurfaceTexture
 import android.os.Bundle
 import android.content.Intent
 import android.graphics.*
@@ -15,6 +19,9 @@ import kotlin.math.atan2
 
 class MainActivity : Activity() {
     private lateinit var preview: DrawingView
+    private lateinit var cameraView: TextureView
+    private var camera: Camera? = null
+    private var cameraEnabled = false
     private lateinit var info: TextView
     private var imageUri: Uri? = null
     private var image: Bitmap? = null
@@ -35,9 +42,29 @@ class MainActivity : Activity() {
         info = TextView(this)
         screen.addView(info)
         preview = DrawingView()
-        screen.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
+        cameraView = TextureView(this)
+        cameraView.surfaceTextureListener = object: TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, w: Int, h: Int) { startCamera() }
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean { stopCamera(); return true }
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+        }
+        val imageLayer = FrameLayout(this)
+        imageLayer.addView(cameraView, FrameLayout.LayoutParams(-1,-1))
+        imageLayer.addView(preview, FrameLayout.LayoutParams(-1,-1))
+        screen.addView(imageLayer, LinearLayout.LayoutParams(-1, 0, 1f))
         fun button(label: String, action: () -> Unit) {
             root.addView(Button(this).apply { text = label; setOnClickListener { action() } })
+        }
+        button("Cámara: activar / desactivar") {
+            cameraEnabled = !cameraEnabled
+            if(cameraEnabled) {
+                if(checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(arrayOf(Manifest.permission.CAMERA), 200)
+                else startCamera()
+            } else stopCamera()
+            preview.invalidate()
+            updateInfo()
         }
         button("Importar JPG / PNG") {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -82,10 +109,47 @@ class MainActivity : Activity() {
         updateInfo()
     }
 
+    @Suppress("DEPRECATION")
+    private fun startCamera() {
+        if(!cameraEnabled || !cameraView.isAvailable || camera != null) return
+        if(checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            camera = Camera.open(0).apply {
+                setDisplayOrientation(90)
+                setPreviewTexture(cameraView.surfaceTexture)
+                startPreview()
+            }
+            cameraView.visibility = View.VISIBLE
+        } catch(e: Exception) {
+            stopCamera()
+            Toast.makeText(this,"No se pudo iniciar la cámara: ${e.message}",Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopCamera() {
+        try { camera?.stopPreview() } catch(_:Exception) {}
+        try { camera?.release() } catch(_:Exception) {}
+        camera = null
+        if(::cameraView.isInitialized) cameraView.visibility = View.INVISIBLE
+    }
+
+    override fun onResume() { super.onResume(); if(::cameraView.isInitialized) startCamera() }
+    override fun onPause() { stopCamera(); super.onPause() }
+
+    override fun onRequestPermissionsResult(requestCode:Int, permissions:Array<out String>, grantResults:IntArray) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+        if(requestCode==200) {
+            if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED) startCamera()
+            else { cameraEnabled=false; updateInfo(); Toast.makeText(this,"Se necesita permiso de cámara",Toast.LENGTH_LONG).show() }
+        }
+    }
+
     private fun updateInfo() {
         info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
             (if(locked) "Ajustes bloqueados" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
+            (if(cameraEnabled) " · Cámara activada (sin anclaje)" else "") +
             "\n*Medida orientativa, sin calibración espacial."
     }
 
@@ -190,7 +254,7 @@ class MainActivity : Activity() {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            canvas.drawColor(Color.rgb(235,235,235))
+            canvas.drawColor(if(cameraEnabled && camera != null) Color.TRANSPARENT else Color.rgb(235,235,235), PorterDuff.Mode.SRC)
             val bitmap=image ?: run {
                 paint.color=Color.DKGRAY; paint.textSize=34f
                 canvas.drawText("Importa una imagen",25f,height/2f,paint)
