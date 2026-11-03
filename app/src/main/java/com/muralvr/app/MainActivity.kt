@@ -40,6 +40,8 @@ class MainActivity : Activity() {
     private var rotation = 0f
     private var locked = false
     private var stereo = false
+    private val editableSliders = mutableListOf<SeekBar>()
+    private lateinit var lockButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +93,7 @@ class MainActivity : Activity() {
             text.layoutParams = LinearLayout.LayoutParams((112 * resources.displayMetrics.density).toInt(), -2)
             row.addView(text)
             row.addView(SeekBar(this).apply {
+                editableSliders.add(this)
                 this.max = max
                 progress = initial
                 layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
@@ -114,7 +117,8 @@ class MainActivity : Activity() {
         slider("VR altura",200,100) { vrVertical = it-100 }
         button("INICIAR MODO VR (salir: Atrás)") { enterVr() }
         val actions = LinearLayout(this)
-        actions.addView(Button(this).apply { text="Bloquear"; setOnClickListener { locked=!locked; text=if(locked) "Desbloquear" else "Bloquear"; preview.invalidate(); updateInfo(); Toast.makeText(this@MainActivity, if(locked) "Plantilla bloqueada" else "Plantilla desbloqueada", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(0,-2,1f))
+        lockButton = Button(this).apply { text="BLOQUEAR"; setOnClickListener { setLocked(!locked) } }
+        actions.addView(lockButton, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Vista doble"; setOnClickListener { stereo=!stereo; preview.invalidate(); updateInfo() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Guardar"; setOnClickListener { saveProject() } }, LinearLayout.LayoutParams(0,-2,1f))
         root.addView(actions)
@@ -123,9 +127,19 @@ class MainActivity : Activity() {
         host.addView(screen, FrameLayout.LayoutParams(-1,-1))
         setContentView(host)
         loadProject()
+        setLocked(false)
         updateInfo()
     }
 
+
+    private fun setLocked(value:Boolean) {
+        locked=value
+        if(::lockButton.isInitialized) lockButton.text=if(locked) "DESBLOQUEAR" else "BLOQUEAR"
+        editableSliders.forEach { it.isEnabled=!locked }
+        preview.invalidate()
+        updateInfo()
+        Toast.makeText(this,if(locked) "Edición bloqueada; no es anclaje a pared" else "Edición desbloqueada",Toast.LENGTH_SHORT).show()
+    }
 
     private fun enterVr() {
         if(vrActive) return
@@ -134,6 +148,7 @@ class MainActivity : Activity() {
             return
         }
         saveProject()
+        setLocked(true)
         vrActive=true
         requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
@@ -256,7 +271,7 @@ class MainActivity : Activity() {
 
     private fun updateInfo() {
         info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
-            (if(locked) "BLOQUEADO" else "Editable") +
+            (if(locked) "EDICIÓN BLOQUEADA (NO ANCLADO)" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
             "\\nCámara: $cameraStatus" +
             "\n*Medida orientativa, sin calibración espacial."
