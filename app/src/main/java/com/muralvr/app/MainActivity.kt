@@ -10,6 +10,8 @@ import android.widget.*
 import org.json.JSONObject
 import java.io.File
 import kotlin.math.min
+import kotlin.math.hypot
+import kotlin.math.atan2
 
 class MainActivity : Activity() {
     private lateinit var preview: DrawingView
@@ -142,6 +144,50 @@ class MainActivity : Activity() {
     }
     inner class DrawingView(context: android.content.Context = this@MainActivity): View(context) {
         private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
+        private var lastCx=0f
+        private var lastCy=0f
+        private var lastDistance=0f
+        private var lastAngle=0f
+        private var previousCount=0
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (image == null || locked) return true
+            val n=event.pointerCount
+            if (n < 1) return true
+            val cx=if(n>=2) (event.getX(0)+event.getX(1))/2f else event.getX(0)
+            val cy=if(n>=2) (event.getY(0)+event.getY(1))/2f else event.getY(0)
+            val dx=if(n>=2) event.getX(1)-event.getX(0) else 0f
+            val dy=if(n>=2) event.getY(1)-event.getY(0) else 0f
+            val distance=hypot(dx,dy)
+            val angle=Math.toDegrees(atan2(dy.toDouble(),dx.toDouble())).toFloat()
+            when(event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN,
+                MotionEvent.ACTION_POINTER_UP -> previousCount=0
+                MotionEvent.ACTION_MOVE -> {
+                    if(previousCount==n) {
+                        x+=cx-lastCx
+                        y+=cy-lastCy
+                        if(n>=2 && lastDistance>5f && distance>5f) {
+                            widthCm=(widthCm*(distance/lastDistance)).toInt().coerceIn(5,1000)
+                            var delta=angle-lastAngle
+                            if(delta>180f) delta-=360f
+                            if(delta< -180f) delta+=360f
+                            rotation+=delta
+                        }
+                        invalidate()
+                        updateInfo()
+                    }
+                    previousCount=n
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> previousCount=0
+            }
+            lastCx=cx
+            lastCy=cy
+            lastDistance=distance
+            lastAngle=angle
+            return true
+        }
+
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             canvas.drawColor(Color.rgb(235,235,235))
