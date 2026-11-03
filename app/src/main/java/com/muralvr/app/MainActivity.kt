@@ -44,7 +44,7 @@ class MainActivity : Activity() {
         screen.addView(info)
         preview = DrawingView()
         cameraView = TextureView(this)
-        cameraView.visibility = View.INVISIBLE
+        cameraView.visibility = View.VISIBLE
         preview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         cameraView.surfaceTextureListener = object: TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(surface: SurfaceTexture, w: Int, h: Int) { startCamera() }
@@ -115,7 +115,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun startCamera() {
         if (!cameraEnabled) return
-        if (!cameraView.isAvailable) { cameraStatus="esperando superficie"; updateInfo(); return }
+        if (!cameraView.isAvailable) { cameraStatus="esperando superficie"; cameraView.postDelayed({ if(cameraEnabled && camera == null) startCamera() }, 250L); updateInfo(); return }
         if (camera != null) return
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             cameraStatus="sin permiso"; updateInfo(); return
@@ -158,7 +158,6 @@ class MainActivity : Activity() {
         try { camera?.stopPreview() } catch(_:Exception) {}
         try { camera?.release() } catch(_:Exception) {}
         camera=null
-        if(::cameraView.isInitialized) cameraView.visibility=View.INVISIBLE
         cameraStatus="apagada"
         if(::preview.isInitialized) preview.invalidate()
     }
@@ -283,7 +282,7 @@ class MainActivity : Activity() {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            canvas.drawColor(if(cameraEnabled && camera != null) Color.TRANSPARENT else Color.rgb(235,235,235), PorterDuff.Mode.SRC)
+            canvas.drawColor(if(cameraEnabled && camera != null) Color.TRANSPARENT else Color.rgb(235,235,235), PorterDuff.Mode.CLEAR)
             val bitmap=image ?: run {
                 paint.color=Color.DKGRAY; paint.textSize=34f
                 canvas.drawText("Importa una imagen",25f,height/2f,paint)
