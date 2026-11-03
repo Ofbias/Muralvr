@@ -277,6 +277,7 @@ class MainActivity : Activity() {
         info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
             (if(locked) "EDICIÓN BLOQUEADA (NO ANCLADO)" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
+            (if(markingCorners) " · Marca esquina " + (corners.size+1) + "/4" else if(corners.size==4) " · Esquinas definidas (sin anclaje)" else "") +
             "\\nCámara: $cameraStatus" +
             "\n*Medida orientativa, sin calibración espacial."
     }
@@ -345,6 +346,14 @@ class MainActivity : Activity() {
         private var previousCount=0
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
+            if(markingCorners) {
+                if(event.actionMasked==MotionEvent.ACTION_UP) {
+                    corners.add(PointF(event.x/width.coerceAtLeast(1),event.y/height.coerceAtLeast(1)))
+                    if(corners.size==4) markingCorners=false
+                    invalidate(); updateInfo()
+                }
+                return true
+            }
             if (image == null || locked) return true
             val n=event.pointerCount
             if (n < 1) return true
