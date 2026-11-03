@@ -27,12 +27,13 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12,12,12,12) }
+        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(this).apply { text = "MuralVR 0.1 · Editor de plantillas"; textSize = 20f }
-        root.addView(title)
+        screen.addView(title)
         info = TextView(this)
-        root.addView(info)
+        screen.addView(info)
         preview = DrawingView()
-        root.addView(preview, LinearLayout.LayoutParams(-1, (320 * resources.displayMetrics.density).toInt()))
+        screen.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
         fun button(label: String, action: () -> Unit) {
             root.addView(Button(this).apply { text = label; setOnClickListener { action() } })
         }
@@ -46,7 +47,8 @@ class MainActivity : Activity() {
         }
         fun slider(label: String, max: Int, initial: Int, change: (Int) -> Unit) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val text = TextView(this).apply { this.text = label; width = 190 }
+            val text = TextView(this).apply { this.text = label; textSize = 13f }
+            text.layoutParams = LinearLayout.LayoutParams((112 * resources.displayMetrics.density).toInt(), -2)
             row.addView(text)
             row.addView(SeekBar(this).apply {
                 this.max = max
@@ -54,7 +56,7 @@ class MainActivity : Activity() {
                 layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
                 setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(s: SeekBar?, p: Int, user: Boolean) {
-                        if (user && !locked) { change(p); preview.invalidate(); updateInfo() }
+                        if (user) { if (locked) { Toast.makeText(this@MainActivity, "Desbloquea los ajustes primero", Toast.LENGTH_SHORT).show() } else { change(p); preview.invalidate(); updateInfo() } }
                     }
                     override fun onStartTrackingTouch(s: SeekBar?) {}
                     override fun onStopTrackingTouch(s: SeekBar?) {}
@@ -72,13 +74,14 @@ class MainActivity : Activity() {
         actions.addView(Button(this).apply { text="Vista doble"; setOnClickListener { stereo=!stereo; preview.invalidate(); updateInfo() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Guardar"; setOnClickListener { saveProject() } }, LinearLayout.LayoutParams(0,-2,1f))
         root.addView(actions)
-        setContentView(ScrollView(this).apply { addView(root) })
+        screen.addView(ScrollView(this).apply { addView(root) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(screen)
         loadProject()
         updateInfo()
     }
 
     private fun updateInfo() {
-        info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · " +
+        info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
             (if(locked) "Ajustes bloqueados" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
             "\n*Medida orientativa, sin calibración espacial."
@@ -131,7 +134,7 @@ class MainActivity : Activity() {
             opacity=j.optInt("opacity",60); widthCm=j.optInt("widthCm",100)
             x=j.optDouble("x",0.0).toFloat(); y=j.optDouble("y",0.0).toFloat()
             rotation=j.optDouble("rotation",0.0).toFloat()
-            locked=j.optBoolean("locked"); stereo=j.optBoolean("stereo")
+            locked=false; stereo=j.optBoolean("stereo")
             val uri=j.optString("uri")
             if(uri.isNotEmpty()) { imageUri=Uri.parse(uri); loadImage(imageUri!!) }
             preview.invalidate()
