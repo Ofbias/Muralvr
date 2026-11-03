@@ -399,6 +399,18 @@ class MainActivity : Activity() {
                 canvas.drawText("Importa una imagen",25f,height/2f,paint)
                 return
             }
+            if(corners.size==4 && !stereo) {
+                val src=floatArrayOf(0f,0f,bitmap.width.toFloat(),0f,bitmap.width.toFloat(),bitmap.height.toFloat(),0f,bitmap.height.toFloat())
+                val dst=FloatArray(8)
+                corners.forEachIndexed { i,p -> dst[2*i]=p.x*width; dst[2*i+1]=p.y*height }
+                val matrix=Matrix()
+                if(matrix.setPolyToPoly(src,0,dst,0,4)) {
+                    paint.alpha=(opacity*255/100).coerceIn(0,255)
+                    canvas.drawBitmap(bitmap,matrix,paint)
+                    paint.alpha=255
+                }
+                return
+            }
             val count=if(stereo) 2 else 1
             for(i in 0 until count) {
                 val w=width.toFloat()/count
