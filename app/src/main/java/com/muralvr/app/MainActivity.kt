@@ -317,6 +317,7 @@ class MainActivity : Activity() {
                 put("x",x.toDouble()); put("y",y.toDouble())
                 put("rotation",rotation.toDouble()); put("locked",locked); put("stereo",stereo)
                 put("eyeOffset",eyeOffset); put("vrZoom",vrZoom); put("vrVertical",vrVertical)
+                put("corners",org.json.JSONArray().apply { corners.forEach { p -> put(org.json.JSONArray().put(p.x.toDouble()).put(p.y.toDouble())) } })
             }
             File(filesDir,"project.json").writeText(json.toString())
             Toast.makeText(this,"Proyecto guardado",Toast.LENGTH_SHORT).show()
@@ -332,6 +333,8 @@ class MainActivity : Activity() {
             rotation=j.optDouble("rotation",0.0).toFloat()
             locked=false; stereo=j.optBoolean("stereo")
             eyeOffset=j.optInt("eyeOffset",0); vrZoom=j.optInt("vrZoom",100); vrVertical=j.optInt("vrVertical",0)
+            corners.clear()
+            j.optJSONArray("corners")?.let { a -> for(i in 0 until min(4,a.length())) { val p=a.optJSONArray(i) ?: continue; corners.add(PointF(p.optDouble(0).toFloat(),p.optDouble(1).toFloat())) } }
             val uri=j.optString("uri")
             if(uri.isNotEmpty()) { imageUri=Uri.parse(uri); loadImage(imageUri!!) }
             preview.invalidate()
@@ -394,6 +397,14 @@ class MainActivity : Activity() {
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             canvas.drawColor(if(cameraEnabled && camera != null) Color.TRANSPARENT else Color.rgb(235,235,235), PorterDuff.Mode.CLEAR)
+            if(markingCorners) {
+                paint.color=Color.YELLOW
+                corners.forEachIndexed { i,p ->
+                    canvas.drawCircle(p.x*width,p.y*height,12f,paint)
+                    paint.textSize=32f
+                    canvas.drawText((i+1).toString(),p.x*width+12f,p.y*height-12f,paint)
+                }
+            }
             val bitmap=image ?: run {
                 paint.color=Color.DKGRAY; paint.textSize=34f
                 canvas.drawText("Importa una imagen",25f,height/2f,paint)
