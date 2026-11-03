@@ -22,6 +22,7 @@ class MainActivity : Activity() {
     private lateinit var cameraView: TextureView
     private var camera: Camera? = null
     private var cameraEnabled = false
+    private var cameraStatus = "apagada"
     private lateinit var info: TextView
     private var imageUri: Uri? = null
     private var image: Bitmap? = null
@@ -43,6 +44,8 @@ class MainActivity : Activity() {
         screen.addView(info)
         preview = DrawingView()
         cameraView = TextureView(this)
+        cameraView.visibility = View.INVISIBLE
+        preview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         cameraView.surfaceTextureListener = object: TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(surface: SurfaceTexture, w: Int, h: Int) { startCamera() }
             override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, w: Int, h: Int) {}
@@ -111,18 +114,42 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     private fun startCamera() {
-        if(!cameraEnabled || !cameraView.isAvailable || camera != null) return
-        if(checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
+        if (!cameraEnabled) return
+        if (!cameraView.isAvailable) { cameraStatus="esperando superficie"; updateInfo(); return }
+        if (camera != null) return
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            cameraStatus="sin permiso"; updateInfo(); return
+        }
         try {
-            camera = Camera.open(0).apply {
-                setDisplayOrientation(90)
-                setPreviewTexture(cameraView.surfaceTexture)
-                startPreview()
+            var rearId = -1
+            val details = Camera.CameraInfo()
+            for (i in 0 until Camera.getNumberOfCameras()) {
+                Camera.getCameraInfo(i, details)
+                if (details.facing == Camera.CameraInfo.CAMERA_FACING_BACK) { rearId=i; break }
             }
-            cameraView.visibility = View.VISIBLE
+            if(rearId < 0) throw IllegalStateException("No se encuentra cámara trasera")
+            val opened = Camera.open(rearId)
+            camera = opened
+            val infoCamera = Camera.CameraInfo()
+            Camera.getCameraInfo(rearId, infoCamera)
+            val degrees = when(windowManager.defaultDisplay.rotation) {
+                Surface.ROTATION_90 -> 90
+                Surface.ROTATION_180 -> 180
+                Surface.ROTATION_270 -> 270
+                else -> 0
+            }
+            opened.setDisplayOrientation((infoCamera.orientation-degrees+360)%360)
+            opened.setPreviewTexture(cameraView.surfaceTexture)
+            cameraView.visibility=View.VISIBLE
+            opened.startPreview()
+            cameraStatus="vista previa iniciada"
+            updateInfo()
+            preview.invalidate()
         } catch(e: Exception) {
             stopCamera()
-            Toast.makeText(this,"No se pudo iniciar la cámara: ${e.message}",Toast.LENGTH_LONG).show()
+            cameraStatus="error: ${e.javaClass.simpleName}: ${e.message}"
+            updateInfo()
+            Toast.makeText(this,"Error de cámara: ${e.message}",Toast.LENGTH_LONG).show()
         }
     }
 
@@ -130,8 +157,10 @@ class MainActivity : Activity() {
     private fun stopCamera() {
         try { camera?.stopPreview() } catch(_:Exception) {}
         try { camera?.release() } catch(_:Exception) {}
-        camera = null
-        if(::cameraView.isInitialized) cameraView.visibility = View.INVISIBLE
+        camera=null
+        if(::cameraView.isInitialized) cameraView.visibility=View.INVISIBLE
+        cameraStatus="apagada"
+        if(::preview.isInitialized) preview.invalidate()
     }
 
     override fun onResume() { super.onResume(); if(::cameraView.isInitialized) startCamera() }
@@ -149,7 +178,7 @@ class MainActivity : Activity() {
         info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
             (if(locked) "Ajustes bloqueados" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
-            (if(cameraEnabled) " · Cámara activada (sin anclaje)" else "") +
+            "\\nCámara: $cameraStatus" +
             "\n*Medida orientativa, sin calibración espacial."
     }
 
