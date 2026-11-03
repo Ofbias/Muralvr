@@ -40,6 +40,8 @@ class MainActivity : Activity() {
     private var rotation = 0f
     private var locked = false
     private var stereo = false
+    private var markingCorners = false
+    private val corners = mutableListOf<PointF>()
     private val editableSliders = mutableListOf<SeekBar>()
     private lateinit var lockButton: Button
 
@@ -115,6 +117,8 @@ class MainActivity : Activity() {
         slider("VR separación",200,100) { eyeOffset = it-100 }
         slider("VR tamaño",200,100) { vrZoom = it.coerceAtLeast(30) }
         slider("VR altura",200,100) { vrVertical = it-100 }
+        button("CALIBRAR 4 ESQUINAS") { corners.clear(); markingCorners=true; setLocked(false); preview.invalidate(); updateInfo() }
+        button("BORRAR ESQUINAS") { corners.clear(); markingCorners=false; preview.invalidate(); updateInfo() }
         button("INICIAR MODO VR (salir: Atrás)") { enterVr() }
         val actions = LinearLayout(this)
         lockButton = Button(this).apply { text="BLOQUEAR"; setOnClickListener { setLocked(!locked) } }
