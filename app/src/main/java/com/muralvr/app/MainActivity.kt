@@ -36,6 +36,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12,12,12,12) }
         val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(this).apply { text = "MuralVR 0.1 · Editor de plantillas"; textSize = 20f }
@@ -102,7 +103,7 @@ class MainActivity : Activity() {
         slider("Mover X",200,100) { x = (it-100).toFloat()*4f }
         slider("Mover Y",200,100) { y = (it-100).toFloat()*4f }
         val actions = LinearLayout(this)
-        actions.addView(Button(this).apply { text="Bloquear"; setOnClickListener { locked=!locked; text=if(locked) "Desbloquear" else "Bloquear"; updateInfo() } }, LinearLayout.LayoutParams(0,-2,1f))
+        actions.addView(Button(this).apply { text="Bloquear"; setOnClickListener { locked=!locked; text=if(locked) "Desbloquear" else "Bloquear"; preview.invalidate(); updateInfo(); Toast.makeText(this@MainActivity, if(locked) "Plantilla bloqueada" else "Plantilla desbloqueada", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Vista doble"; setOnClickListener { stereo=!stereo; preview.invalidate(); updateInfo() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Guardar"; setOnClickListener { saveProject() } }, LinearLayout.LayoutParams(0,-2,1f))
         root.addView(actions)
@@ -175,7 +176,7 @@ class MainActivity : Activity() {
 
     private fun updateInfo() {
         info.text = "Opacidad: $opacity% · Ancho: $widthCm cm* · Giro: ${rotation.toInt()}° · X: ${x.toInt()} · Y: ${y.toInt()} · " +
-            (if(locked) "Ajustes bloqueados" else "Editable") +
+            (if(locked) "BLOQUEADO" else "Editable") +
             (if(stereo) " · Vista doble experimental" else "") +
             "\\nCámara: $cameraStatus" +
             "\n*Medida orientativa, sin calibración espacial."
