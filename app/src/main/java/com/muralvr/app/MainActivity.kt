@@ -3,6 +3,7 @@ package com.muralvr.app
 import android.app.Activity
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.hardware.Camera
 import android.graphics.SurfaceTexture
 import android.os.Bundle
@@ -18,6 +19,12 @@ import kotlin.math.hypot
 import kotlin.math.atan2
 
 class MainActivity : Activity() {
+    private lateinit var host: FrameLayout
+    private var vrView: VrView? = null
+    private var vrActive = false
+    private var eyeOffset = 0
+    private var vrZoom = 100
+    private var vrVertical = 0
     private lateinit var preview: DrawingView
     private lateinit var cameraView: TextureView
     private var camera: Camera? = null
@@ -102,15 +109,88 @@ class MainActivity : Activity() {
         slider("Giro",360,180) { rotation = (it-180).toFloat() }
         slider("Mover X",200,100) { x = (it-100).toFloat()*4f }
         slider("Mover Y",200,100) { y = (it-100).toFloat()*4f }
+        slider("VR separación",200,100) { eyeOffset = it-100 }
+        slider("VR tamaño",200,100) { vrZoom = it.coerceAtLeast(30) }
+        slider("VR altura",200,100) { vrVertical = it-100 }
+        button("INICIAR MODO VR (salir: Atrás)") { enterVr() }
         val actions = LinearLayout(this)
         actions.addView(Button(this).apply { text="Bloquear"; setOnClickListener { locked=!locked; text=if(locked) "Desbloquear" else "Bloquear"; preview.invalidate(); updateInfo(); Toast.makeText(this@MainActivity, if(locked) "Plantilla bloqueada" else "Plantilla desbloqueada", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Vista doble"; setOnClickListener { stereo=!stereo; preview.invalidate(); updateInfo() } }, LinearLayout.LayoutParams(0,-2,1f))
         actions.addView(Button(this).apply { text="Guardar"; setOnClickListener { saveProject() } }, LinearLayout.LayoutParams(0,-2,1f))
         root.addView(actions)
         screen.addView(ScrollView(this).apply { addView(root) }, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(screen)
+        host = FrameLayout(this)
+        host.addView(screen, FrameLayout.LayoutParams(-1,-1))
+        setContentView(host)
         loadProject()
         updateInfo()
+    }
+
+
+    private fun enterVr() {
+        if(vrActive) return
+        if(!cameraEnabled || camera == null) {
+            Toast.makeText(this,"Activa la cámara antes de entrar en VR",Toast.LENGTH_LONG).show()
+            return
+        }
+        saveProject()
+        vrActive=true
+        requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
+        vrView=VrView().also { host.addView(it,FrameLayout.LayoutParams(-1,-1)) }
+    }
+
+    private fun exitVr() {
+        if(!vrActive) return
+        vrActive=false
+        vrView?.let { host.removeView(it) }
+        vrView=null
+        window.decorView.systemUiVisibility=0
+        requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    @Deprecated("Back button")
+    override fun onBackPressed() {
+        if(vrActive) exitVr() else super.onBackPressed()
+    }
+
+    inner class VrView: View(this@MainActivity) {
+        private val p=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        override fun onDraw(canvas:Canvas) {
+            super.onDraw(canvas)
+            canvas.drawColor(Color.BLACK)
+            val half=width/2f
+            val frame=if(cameraView.isAvailable && camera!=null) try { cameraView.getBitmap(640,360) } catch(_:Exception) { null } else null
+            for(i in 0..1) {
+                canvas.save()
+                canvas.clipRect(i*half,0f,(i+1)*half,height.toFloat())
+                val center=half*(i+0.5f)+(if(i==0) -eyeOffset else eyeOffset)*resources.displayMetrics.density
+                val cy=height/2f+vrVertical*resources.displayMetrics.density
+                val zoom=vrZoom/100f
+                if(frame!=null) {
+                    val s=maxOf(half/frame.width,height.toFloat()/frame.height)*zoom
+                    val dw=frame.width*s
+                    val dh=frame.height*s
+                    p.alpha=255
+                    canvas.drawBitmap(frame,null,RectF(center-dw/2,cy-dh/2,center+dw/2,cy+dh/2),p)
+                }
+                image?.let { bitmap ->
+                    val base=min(half/bitmap.width,height.toFloat()/bitmap.height)
+                    val scale=base*(widthCm/100f)*zoom
+                    canvas.translate(center+x*half/preview.width.coerceAtLeast(1),cy+y*height/preview.height.coerceAtLeast(1))
+                    canvas.rotate(rotation)
+                    canvas.scale(scale,scale)
+                    p.alpha=(opacity*255/100).coerceIn(0,255)
+                    canvas.drawBitmap(bitmap,-bitmap.width/2f,-bitmap.height/2f,p)
+                }
+                canvas.restore()
+            }
+            frame?.recycle()
+            p.alpha=255
+            p.color=Color.DKGRAY
+            canvas.drawRect(half-1,0f,half+1,height.toFloat(),p)
+            if(vrActive) postInvalidateDelayed(100L)
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -216,6 +296,7 @@ class MainActivity : Activity() {
                 put("opacity",opacity); put("widthCm",widthCm)
                 put("x",x.toDouble()); put("y",y.toDouble())
                 put("rotation",rotation.toDouble()); put("locked",locked); put("stereo",stereo)
+                put("eyeOffset",eyeOffset); put("vrZoom",vrZoom); put("vrVertical",vrVertical)
             }
             File(filesDir,"project.json").writeText(json.toString())
             Toast.makeText(this,"Proyecto guardado",Toast.LENGTH_SHORT).show()
@@ -230,6 +311,7 @@ class MainActivity : Activity() {
             x=j.optDouble("x",0.0).toFloat(); y=j.optDouble("y",0.0).toFloat()
             rotation=j.optDouble("rotation",0.0).toFloat()
             locked=false; stereo=j.optBoolean("stereo")
+            eyeOffset=j.optInt("eyeOffset",0); vrZoom=j.optInt("vrZoom",100); vrVertical=j.optInt("vrVertical",0)
             val uri=j.optString("uri")
             if(uri.isNotEmpty()) { imageUri=Uri.parse(uri); loadImage(imageUri!!) }
             preview.invalidate()
